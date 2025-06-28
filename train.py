@@ -4,7 +4,11 @@
 import time
 from alg.opt import *
 from alg import alg, modelopera
-from utils.util import set_random_seed, get_args, print_row, print_args, train_valid_target_eval_names, alg_loss_dict, print_environ
+from utils.util import (
+    set_random_seed, get_args, print_row, print_args,
+    train_valid_target_eval_names, alg_loss_dict, print_environ,
+    extract_domain_labels  # <-- added for robust domain label extraction
+)
 from datautil.getdataloader_single import get_act_dataloader, get_curriculum_loader
 import torch
 import torch.nn as nn
@@ -27,14 +31,10 @@ def main(args):
     # ---- Curriculum Loader Setup ----
     use_curriculum = getattr(args, 'curriculum', False)
     if use_curriculum:
-        # First, get the standard loaders so we can get train_dataset and domain labels
+        # Get the standard loaders and train_dataset for curriculum learning
         train_loader, train_loader_noshuffle, valid_loader, target_loader, train_dataset, _, _ = get_act_dataloader(args, return_dataset=True)
-        # Make sure your get_act_dataloader returns train_dataset with .domain_labels
-        if hasattr(train_dataset, 'domain_labels'):
-            domain_labels = train_dataset.domain_labels
-        else:
-            # fallback: try extracting from dataset
-            domain_labels = [x[2] for x in train_dataset]
+        # Robustly extract domain labels
+        domain_labels = extract_domain_labels(train_dataset)
         domain_order = sorted(list(set(domain_labels)))
         curriculum_loaders = get_curriculum_loader(
             train_dataset,
@@ -46,7 +46,6 @@ def main(args):
         )
         current_stage = 0
         train_loader = curriculum_loaders[current_stage]
-        # Keep others the same
     else:
         train_loader, train_loader_noshuffle, valid_loader, target_loader, _, _, _ = get_act_dataloader(args)
 
@@ -118,12 +117,12 @@ def main(args):
                     for graph_batch in geo_loader:
                         graph_batch = graph_batch.cuda()
                         gnn_features = gnn(graph_batch)
-                    # >>>>> Only pass GNN features and label(s) forward <<<<<
+                    # Only pass GNN features and label(s) forward
                     if isinstance(data, (list, tuple)) and len(data) > 1:
                         data = (gnn_features, *data[1:])
                     else:
                         data = gnn_features
-                # === END GNN block ===
+                # END GNN block
 
                 loss_result_dict = algorithm.update_a(data, opta)
             print_row([step]+[loss_result_dict[item] for item in loss_list], colwidth=15)
@@ -149,7 +148,7 @@ def main(args):
                         data = (gnn_features, *data[1:])
                     else:
                         data = gnn_features
-                # === END GNN block ===
+                # END GNN block
 
                 loss_result_dict = algorithm.update_d(data, optd)
             print_row([step]+[loss_result_dict[item] for item in loss_list], colwidth=15)
@@ -184,7 +183,7 @@ def main(args):
                         data = (gnn_features, *data[1:])
                     else:
                         data = gnn_features
-                # === END GNN block ===
+                # END GNN block
 
                 step_vals = algorithm.update(data, opt)
 
