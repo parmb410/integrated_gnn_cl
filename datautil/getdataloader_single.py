@@ -9,9 +9,24 @@ import datautil.actdata.util as actutil
 from datautil.util import combindataset, subdataset
 
 import datautil.actdata.cross_people as cross_people
+import torch
+from torch.utils.data import DataLoader, Subset
 
 task_act = {'cross_people': cross_people}
 
+def get_curriculum_loader(dataset, domain_labels, batch_size, domain_order=None, shuffle=True, num_workers=0):
+    """
+    Returns a list of DataLoaders, each with an increasing subset of domains.
+    """
+    if domain_order is None:
+        domain_order = sorted(list(set(domain_labels)))
+    loaders = []
+    for k in range(1, len(domain_order) + 1):
+        domains_included = domain_order[:k]
+        indices = [i for i, d in enumerate(domain_labels) if d in domains_included]
+        subset = Subset(dataset, indices)
+        loaders.append(DataLoader(subset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers))
+    return loaders
 
 def get_dataloader(args, tr, val, tar):
     train_loader = DataLoader(dataset=tr, batch_size=args.batch_size,
