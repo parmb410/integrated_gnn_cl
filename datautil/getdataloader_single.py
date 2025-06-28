@@ -39,8 +39,7 @@ def get_dataloader(args, tr, val, tar):
                                num_workers=args.N_WORKERS, drop_last=False, shuffle=False)
     return train_loader, train_loader_noshuffle, valid_loader, target_loader
 
-
-def get_act_dataloader(args):
+def get_act_dataloader(args, return_dataset=False):
     source_datasetlist = []
     target_datalist = []
     pcross_act = task_act[args.task]
@@ -70,4 +69,9 @@ def get_act_dataloader(args):
     targetdata = combindataset(args, target_datalist)
     train_loader, train_loader_noshuffle, valid_loader, target_loader = get_dataloader(
         args, tr, val, targetdata)
-    return train_loader, train_loader_noshuffle, valid_loader, target_loader, tr, val, targetdata
+    
+    # Patch: handle return_dataset for curriculum learning
+    if return_dataset:
+        return train_loader, train_loader_noshuffle, valid_loader, target_loader, tr, val, targetdata
+    else:
+        return train_loader, train_loader_noshuffle, valid_loader, target_loader, None, None, None
