@@ -5,7 +5,7 @@ import time
 from alg.opt import *
 from alg import alg, modelopera
 from utils.util import set_random_seed, get_args, print_row, print_args, train_valid_target_eval_names, alg_loss_dict, print_environ
-from datautil.getdataloader_single import get_act_dataloader
+from datautil.getdataloader_single import get_act_dataloader, get_curriculum_loader
 import torch
 import torch.nn as nn
 
@@ -24,7 +24,31 @@ def main(args):
     else:
         args.batch_size = 16*args.latent_domain_num
 
-    train_loader, train_loader_noshuffle, valid_loader, target_loader, _, _, _ = get_act_dataloader(args)
+    # ---- Curriculum Loader Setup ----
+    use_curriculum = getattr(args, 'curriculum', False)
+    if use_curriculum:
+        # First, get the standard loaders so we can get train_dataset and domain labels
+        train_loader, train_loader_noshuffle, valid_loader, target_loader, train_dataset, _, _ = get_act_dataloader(args, return_dataset=True)
+        # Make sure your get_act_dataloader returns train_dataset with .domain_labels
+        if hasattr(train_dataset, 'domain_labels'):
+            domain_labels = train_dataset.domain_labels
+        else:
+            # fallback: try extracting from dataset
+            domain_labels = [x[2] for x in train_dataset]
+        domain_order = sorted(list(set(domain_labels)))
+        curriculum_loaders = get_curriculum_loader(
+            train_dataset,
+            domain_labels,
+            batch_size=args.batch_size,
+            domain_order=domain_order,
+            shuffle=True,
+            num_workers=getattr(args, 'num_workers', 0)
+        )
+        current_stage = 0
+        train_loader = curriculum_loaders[current_stage]
+        # Keep others the same
+    else:
+        train_loader, train_loader_noshuffle, valid_loader, target_loader, _, _, _ = get_act_dataloader(args)
 
     best_valid_acc, target_acc = 0, 0
 
@@ -73,6 +97,13 @@ def main(args):
         print('====Feature update====')
         loss_list = ['class']
         print_row(['epoch']+[item+'_loss' for item in loss_list], colwidth=15)
+
+        # ---- Curriculum Stepper ----
+        if use_curriculum:
+            if round % args.curriculum_step == 0 and round > 0 and current_stage < len(curriculum_loaders) - 1:
+                current_stage += 1
+                train_loader = curriculum_loaders[current_stage]
+                print(f"[CL] Curriculum Learning: Advancing to stage {current_stage+1} with domains {domain_order[:current_stage+1]}")
 
         for step in range(args.local_epoch):
             for data in train_loader:
