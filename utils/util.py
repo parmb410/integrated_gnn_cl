@@ -108,6 +108,26 @@ def act_param_init(args):
     args.input_shape, args.num_classes, args.grid_size = tmp[args.dataset]
     return args
 
+# --------- ADDED: Robust extraction of domain labels from dataset ----------
+def extract_domain_labels(dataset):
+    """Try to extract a list of domain labels from a dataset."""
+    if hasattr(dataset, 'domain_labels'):
+        return dataset.domain_labels
+    try:
+        # If dataset is indexable, try to get third item from each __getitem__
+        domain_labels = []
+        for idx in range(len(dataset)):
+            item = dataset[idx]
+            if isinstance(item, (tuple, list)) and len(item) >= 3:
+                domain_labels.append(item[2])
+            else:
+                raise Exception
+        return domain_labels
+    except Exception:
+        raise ValueError("Cannot extract domain_labels from dataset. Please ensure your dataset "
+                         "has a .domain_labels attribute or returns (x, y, domain_label) for each sample.")
+
+# -------------------------------------------------------------------------
 
 def get_args():
     parser = argparse.ArgumentParser(description='DG')
