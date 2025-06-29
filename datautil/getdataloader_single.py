@@ -21,7 +21,8 @@ def get_curriculum_loader(dataset, domain_labels, batch_size, domain_order=None,
     if domain_order is None:
         domain_order = sorted(list(set(domain_labels)))
     loaders = []
-    for k in range(1, len(domain_order) + 1):
+    min_domains = min(2, len(domain_order))
+    for k in range(min_domains, len(domain_order) + 1):
         domains_included = domain_order[:k]
         indices = [i for i, d in enumerate(domain_labels) if d in domains_included]
         subset = Subset(dataset, indices)
