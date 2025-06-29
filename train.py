@@ -46,8 +46,13 @@ def main(args):
         )
         current_stage = 0
         train_loader = curriculum_loaders[current_stage]
+        # FULL train loader for .set_dlabel (must not be a Subset)
+        train_loader_full = torch.utils.data.DataLoader(
+            train_dataset, batch_size=args.batch_size, shuffle=False, num_workers=getattr(args, 'num_workers', 0)
+        )
     else:
         train_loader, train_loader_noshuffle, valid_loader, target_loader, _, _, _ = get_act_dataloader(args)
+        train_loader_full = train_loader  # fallback, just use original
 
     best_valid_acc, target_acc = 0, 0
 
@@ -153,7 +158,8 @@ def main(args):
                 loss_result_dict = algorithm.update_d(data, optd)
             print_row([step]+[loss_result_dict[item] for item in loss_list], colwidth=15)
 
-        algorithm.set_dlabel(train_loader)
+        # FIX: Always use the full train_loader for set_dlabel (never a subset/curriculum loader)
+        algorithm.set_dlabel(train_loader_full)
 
         print('====Domain-invariant feature learning====')
 
